@@ -1,53 +1,40 @@
 #include <Arduino.h>
-// Pin-Konfiguration
-const int pwmPin = 9;          // PWM-Ausgang auf Pin 9
-const int amplitude = 127;     // Amplitude des Sinus (0-127 für 50% Duty-Cycle)
-const int offset = 128;        // Offset für Mittelwert (0-255)
-const int numSamples = 100;    // Anzahl der Schritte für eine Sinusperiode
-const int delayTime = 10;      // Zeitverzögerung in ms zwischen den Samples
+// Konfiguration
+const int numPins = 4;          // Anzahl der Pins für das R-2R Netzwerk
+const int pins[numPins] = {8, 9, 10, 11};  // Arduino-Pins für R-2R Netzwerk
+const int numSamples = 100;     // Anzahl der Schritte für eine Sinusperiode
+const int delayTime = 10;       // Zeitverzögerung in ms zwischen den Samples
 
 // Array zur Speicherung der Sinuswerte
 int sinusValues[numSamples];
 
 void setup() {
-  // Berechne die Sinuswerte für eine Periode und speichere sie im Array
+  // Setze die Pins auf OUTPUT
+  for (int i = 0; i < numPins; i++) {
+    pinMode(pins[i], OUTPUT);
+  }
+
+  // Berechne die Sinuswerte und speichere sie im Array
   for (int i = 0; i < numSamples; i++) {
-    float angle = (2.0 * PI * i) / numSamples;        // Winkel in Bogenmaß
-    sinusValues[i] = offset + amplitude * sin(angle); // Sinuswert berechnen und skalieren
+    float angle = (2.0 * PI * i) / numSamples;           // Winkel in Bogenmaß
+    float sinValue = 0.5 + 0.5 * sin(angle);             // Sinus (0-1 Bereich)
+    sinusValues[i] = int(sinValue * (1 << numPins) - 1); // Skalieren auf 4 Bit
   }
 }
 
 void loop() {
-  // Sinuswerte an den PWM-Pin ausgeben
+  // Sinuswerte über das R-2R Netzwerk ausgeben
   for (int i = 0; i < numSamples; i++) {
-    analogWrite(pwmPin, sinusValues[i]); // PWM-Wert setzen
-    delay(delayTime);                    // Verzögerung für eine gleichmäßige Ausgabe
+    outputToR2R(sinusValues[i]);
+    delay(delayTime);
   }
 }
 
-/*
- * Aufbau des RC-Tiefpassfilters
- * 
- * Verwende einen Widerstand (R) und einen Kondensator (C) als RC-Tiefpassfilter,
- * um das PWM-Signal zu glätten und eine annähernd analoge Sinuskurve zu erzeugen.
- *
- * RC-Tiefpassfilter-Schaltung:
- * 
- * PWM-Pin (Pin 9) ---- R (10kΩ) ----+---- Ausgang (geglättetes Signal)
- *                                   |
- *                                   C (10µF)
- *                                   |
- *                                 Masse (GND)
- * 
- * Schritte:
- * 1. Verbinde den PWM-Pin (Pin 9) des Arduino über einen 10kΩ-Widerstand mit einem Steckbrettpunkt.
- * 2. Verbinde den anderen Anschluss des 10kΩ-Widerstands mit einem 10µF-Kondensator.
- * 3. Schließe den anderen Anschluss des 10µF-Kondensators an Masse (GND) an.
- * 4. Der Verbindungspunkt zwischen dem Widerstand und dem Kondensator ist der geglättete 
- *    Ausgang des Sinussignals.
- *
- * Hinweis:
- * - Die Werte für R und C sind so gewählt, dass die Grenzfrequenz bei etwa 1.6 Hz liegt.
- * - Diese Schaltung hilft, die hochfrequenten Komponenten des PWM-Signals zu entfernen 
- *   und die Sinusform besser abzubilden.
- */
+// Funktion zur Ausgabe an das R-2R Netzwerk
+void outputToR2R(int value) {
+  for (int i = 0; i < numPins; i++) {
+    int bitValue = (value >> i) & 0x01;   // Einzelnes Bit extrahieren
+    digitalWrite(pins[i], bitValue);      // Bit an Pin schreiben
+  }
+}
+
